@@ -1,7 +1,9 @@
-from fastapi import FastAPI,HTTPException, status
+from fastapi import FastAPI,HTTPException, status,Depends
 from database import get_db_connection
-from schemas import UserCreate, UserResponse
-from security import hash_password
+from schemas import UserCreate, UserResponse, Userlogin, Token, HabitResponse, HabitCreate
+from security import hash_password,verify_password,create_access_token,get_current_user
+from fastapi.security import OAuth2PasswordRequestForm
+from typing import List
 
 app = FastAPI(title = "Habit Tracker API")
 
@@ -51,3 +53,50 @@ def register_user(user:UserCreate):
     conn.close()
 
     return new_user;
+@app.post("/login", response_model = Token)
+def login_user(form_data: OAuth2PasswordRequestForm = Depends()):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT id, email,pass_hash FROM users WHERE email = %s;",(form_data.username,))
+    user = cursor.fetchone()
+    cursor.close()
+    conn.close()
+
+    if not user or not verify_password(form_data.password, user["pass_hash"]):
+        raise HTTPException(
+            status_code = status.HTTP_401_UNAUTHORIZED,
+            detail = "Invalid credentials"
+        )
+    access_token = create_access_token(data={"sub":str(user["id"])})
+    return {"access_token": access_token, "token_type":"bearer"}
+
+@app.get("/users/me", response_model = UserResponse)
+def read_current_user(current_user:dict= Depends(get_current_user)):
+    return current_user
+
+@app.post("/habits", response_model = HabitResponse)
+def create_habit(habit : HabitCreate, current_user: dict = Depends(get_current_user)):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("INSERT INTO habits (user_id, name,description) VALUES (%s,%s,%s) RETURNING id, user_id,name,description,created_at;", (current_user["id"],habit.name,habit.description))
+    new_habit = cursor.fetchone()
+
+    conn.commit()
+    cursor.close()
+    conn.commit()
+
+    return new_habit
+
+@app.get("/habits", response_model = List[HabitResponse])
+def get_user_habits(current_user: dict= Depends(get_current_user)):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT id, user_id, name, description, created_at FROM habits WHERE user_id = %s;",(current_user["id"],))
+    habits = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    
+    return habits
