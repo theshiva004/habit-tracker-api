@@ -26,7 +26,7 @@ def db_check():
     except Exception as e:
         raise HTTPException(status_code = 500,detail = str(e))
 
-@app.post("/register",response_model = UserResponse, status_code = status.HTTP_201_created)
+@app.post("/register",response_model = UserResponse, status_code = status.HTTP_201_CREATED)
 def register_user(user:UserCreate):
     conn = get_db_connection()
     cursor = conn.cursor()
