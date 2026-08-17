@@ -8,7 +8,8 @@ from schemas import (
     UserResponse, 
     Token, 
     HabitResponse, 
-    HabitCreate
+    HabitCreate,
+    HabitCompletionResponse
 )
 from security import (
     hash_password, 
@@ -97,13 +98,27 @@ def create_habit(habit: HabitCreate, current_user: dict = Depends(get_current_us
     conn = get_db_connection()
     cursor = conn.cursor()
 
+    # 1. Check if a habit with this name already exists for the current user
+    cursor.execute(
+        "SELECT id FROM habits WHERE user_id = %s AND LOWER(name) = LOWER(%s);",
+        (current_user["id"], habit.name.strip())
+    )
+    if cursor.fetchone():
+        cursor.close()
+        conn.close()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Habit '{habit.name}' already exists."
+        )
+
+    # 2. Create the habit
     cursor.execute(
         """
         INSERT INTO habits (user_id, name, description) 
         VALUES (%s, %s, %s) 
         RETURNING id, user_id, name, description, created_at;
         """, 
-        (current_user["id"], habit.name, habit.description)
+        (current_user["id"], habit.name.strip(), habit.description)
     )
     new_habit = cursor.fetchone()
 
@@ -127,3 +142,42 @@ def get_user_habits(current_user: dict = Depends(get_current_user)):
     conn.close()
     
     return habits
+
+@app.post("/habits/{habit_id}/complete", response_model = HabitCompletionResponse)
+def log_habit_competion(habit_id:int, current_user:dict = Depends(get_current_user)):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM habits WHERE id = %s AND user_id = %s;",(habit_id, current_user["id"]))
+    if not cursor.fetchone():
+        cursor.close()
+        conn.close()
+        raise HTTPException(status_code = status.HTTP_404_NOT_FOUND, detail= "Habit not found or unauthorized")
+
+    cursor.execute("INSERT INTO completion (habit_id) VALUES (%s) RETURNING id, habit_id, completed_at;", (habit_id,))
+    new_completion = cursor.fetchone()
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return new_completion
+
+@app.get("/habits/{habit_id}/completions", response_model=List[HabitCompletionResponse])
+def get_habit_completions(habit_id: int, current_user: dict = Depends(get_current_user)):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Check ownership
+    cursor.execute("SELECT id FROM habits WHERE id = %s AND user_id = %s;", (habit_id, current_user["id"]))
+    if not cursor.fetchone():
+        cursor.close()
+        conn.close()
+        raise HTTPException(status_code=404, detail="Habit not found or unauthorized")
+
+    cursor.execute(
+        "SELECT id, habit_id, completed_at FROM completion WHERE habit_id = %s ORDER BY completed_at DESC;",
+        (habit_id,)
+    )
+    completions = cursor.fetchall()
+    cursor.close()
+    conn.close()
+
+    return completions
