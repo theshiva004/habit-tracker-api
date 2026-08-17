@@ -35,7 +35,8 @@ habit-tracker-api/
 │── schemas.py       # Pydantic data models & response serialization
 │── security.py      # Password hashing, JWT token creation, & auth dependencies
 │── .env             # Environment variables (git-ignored)
-└── README.md        # Project documentation
+|── README.md        # Project documentation
+└--requirements.txt  # Project requirements
 ```
 
 ---
