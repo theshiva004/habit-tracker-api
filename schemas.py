@@ -49,3 +49,14 @@ class HabitCompletionResponse(BaseModel):
 class HabitUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+
+class HabitTodayResponse(BaseModel):
+    id: int
+    user_id: int
+    name: str
+    description: Optional[str] = None
+    created_at: datetime
+    completed_today: bool
+
+    class Config:
+        from_attributes = True

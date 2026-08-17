@@ -10,7 +10,8 @@ from schemas import (
     HabitResponse, 
     HabitCreate,
     HabitCompletionResponse,
-    HabitUpdate
+    HabitUpdate,
+    HabitTodayResponse
 )
 from security import (
     hash_password, 
@@ -276,3 +277,33 @@ def undo_habit_completion(habit_id: int, current_user: dict = Depends(get_curren
 
     return None 
 
+@app.get("/habits/today", response_model=List[HabitTodayResponse])
+def get_today_dashboard(current_user: dict = Depends(get_current_user)):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT 
+            h.id, 
+            h.user_id, 
+            h.name, 
+            h.description, 
+            h.created_at,
+            EXISTS (
+                SELECT 1 FROM completion c 
+                WHERE c.habit_id = h.id 
+                AND c.completed_at::DATE = CURRENT_DATE
+            ) AS completed_today
+        FROM habits h
+        WHERE h.user_id = %s
+        ORDER BY h.id ASC;
+        """,
+        (current_user["id"],)
+    )
+    habits = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    return habits
