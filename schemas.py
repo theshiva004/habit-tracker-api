@@ -31,3 +31,4 @@ class HabitResponse(BaseModel):
     name:str
     description: Optional[str]=None
     created_at: datetime
+    password:str

@@ -4,6 +4,8 @@ from schemas import UserCreate, UserResponse, Userlogin, Token, HabitResponse, H
 from security import hash_password,verify_password,create_access_token,get_current_user
 from fastapi.security import OAuth2PasswordRequestForm
 from typing import List
+from schemas import UserCreate, UserResponse, Userlogin, Token
+from security import hash_password,verify_password,create_access_token
 
 app = FastAPI(title = "Habit Tracker API")
 
@@ -59,11 +61,17 @@ def login_user(form_data: OAuth2PasswordRequestForm = Depends()):
     cursor = conn.cursor()
 
     cursor.execute("SELECT id, email,pass_hash FROM users WHERE email = %s;",(form_data.username,))
+def login_user(credentials:Userlogin):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT id, email,pass_hash FROM users WHERE email = %s;",(credentials.email,))
     user = cursor.fetchone()
     cursor.close()
     conn.close()
 
     if not user or not verify_password(form_data.password, user["pass_hash"]):
+    if not user or not verify_password(credentials.password, user["pass_hash"]):
         raise HTTPException(
             status_code = status.HTTP_401_UNAUTHORIZED,
             detail = "Invalid credentials"
@@ -100,3 +108,4 @@ def get_user_habits(current_user: dict= Depends(get_current_user)):
     conn.close()
     
     return habits
+    return {"access_token": access_token, "token_type":"bearer"}

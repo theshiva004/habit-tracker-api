@@ -1,6 +1,9 @@
 import os
 from datetime import datetime, timedelta, timezone
 import jwt
+import os
+from datetime import datetime, timedelta, timezone
+import jwt
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -49,3 +52,4 @@ def get_current_user(token: str=Depends(oauth2_scheme)):
     if user is None:
         raise credentials_exception
     return user
+    return jwt.encode(to_encode, SECRET_KEY,algorithm = ALGORITHM)
