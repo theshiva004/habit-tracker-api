@@ -9,7 +9,8 @@ from schemas import (
     Token, 
     HabitResponse, 
     HabitCreate,
-    HabitCompletionResponse
+    HabitCompletionResponse,
+    HabitUpdate
 )
 from security import (
     hash_password, 
@@ -181,3 +182,97 @@ def get_habit_completions(habit_id: int, current_user: dict = Depends(get_curren
     conn.close()
 
     return completions
+
+@app.put("/habits/{habit_id}", response_model= HabitResponse)
+def update_habit(habit_id:int, habit_data: HabitUpdate, current_user: dict = Depends(get_current_user)):
+    conn = get_db_connection();
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT id, name, description FROM habits WHERE id = %s AND user_id = %s;",(habit_id, current_user["id"]))
+
+    existing_habit = cursor.fetchone()
+    if not existing_habit:
+        cursor.close()
+        conn.close()
+        raise HTTPException(status_code = status.HTTP_404_NOT_FOUND, detail = "Habit nor=t found or unauthorized")
+
+    new_name = habit_data.name.strip() if habit_data.name is not None else existing_habit["name"]
+    new_desc = habit_data.description if habit_data.description is not None else existing_habit["description"]
+
+    if habit_data.name is not None and new_name.lower() != existing_habit["name"].lower():
+        cursor.execute(
+            "SELECT id FROM habits WHERE user_id = %s AND LOWER(name) = LOWER(%s) AND id != %s;",
+            (current_user["id"], new_name, habit_id)
+        )
+        if cursor.fetchone():
+            cursor.close()
+            conn.close()
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Habit '{new_name}' already exists.")
+
+    cursor.execute(
+        """
+        UPDATE habits
+        SET name = %s, description = %s
+        WHERE id = %s
+        RETURNING id, user_id, name, description, created_at;
+        """,
+        (new_name, new_desc, habit_id)
+    )
+    updated_habit = cursor.fetchone()
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return updated_habit
+@app.delete("/habits/{habit_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_habit(habit_id: int, current_user: dict = Depends(get_current_user)):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "DELETE FROM habits WHERE id = %s AND user_id = %s RETURNING id;",
+        (habit_id, current_user["id"])
+    )
+    deleted_habit = cursor.fetchone()
+
+    if not deleted_habit:
+        cursor.close()
+        conn.close()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Habit not found or unauthorized")
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return None
+
+
+@app.delete("/habits/{habit_id}/complete", status_code=status.HTTP_204_NO_CONTENT)
+def undo_habit_completion(habit_id: int, current_user: dict = Depends(get_current_user)):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT id FROM habits WHERE id = %s AND user_id = %s;", (habit_id, current_user["id"]))
+    if not cursor.fetchone():
+        cursor.close()
+        conn.close()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Habit not found or unauthorized")
+
+    cursor.execute(
+        "DELETE FROM completion WHERE habit_id = %s AND completed_at::DATE = CURRENT_DATE RETURNING id;",
+        (habit_id,)
+    )
+    deleted = cursor.fetchone()
+
+    if not deleted:
+        cursor.close()
+        conn.close()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No completion logged for today")
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return None 
+

@@ -46,3 +46,6 @@ class HabitCompletionResponse(BaseModel):
 
     class Config:
         from_attributes = True
+class HabitUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
