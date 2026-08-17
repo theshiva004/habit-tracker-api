@@ -1,7 +1,7 @@
 from fastapi import FastAPI,HTTPException, status
 from database import get_db_connection
-from schemas import UserCreate, UserResponse
-from security import hash_password
+from schemas import UserCreate, UserResponse, Userlogin, Token
+from security import hash_password,verify_password,create_access_token
 
 app = FastAPI(title = "Habit Tracker API")
 
@@ -51,3 +51,20 @@ def register_user(user:UserCreate):
     conn.close()
 
     return new_user;
+@app.post("/login", response_model = Token)
+def login_user(credentials:Userlogin):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT id, email,pass_hash FROM users WHERE email = %s;",(credentials.email,))
+    user = cursor.fetchone()
+    cursor.close()
+    conn.close()
+
+    if not user or not verify_password(credentials.password, user["pass_hash"]):
+        raise HTTPException(
+            status_code = status.HTTP_401_UNAUTHORIZED,
+            detail = "Invalid credentials"
+        )
+    access_token = create_access_token(data={"sub":str(user["id"])})
+    return {"access_token": access_token, "token_type":"bearer"}
