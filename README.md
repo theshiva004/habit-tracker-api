@@ -45,28 +45,27 @@ habit-tracker-api/
 Execute the following SQL script in your PostgreSQL database to initialize the required tables and constraints:
 
 ```sql
--- 1. Users Table
-CREATE TABLE users (
-    id SERIAL PRIMARY KEY,
-    email VARCHAR(255) UNIQUE NOT NULL,
-    pass_hash VARCHAR(255) NOT NULL
+-- users table
+CREATE TABLE users(
+	id BIGSERIAL PRIMARY KEY,
+	email VARCHAR(255) UNIQUE NOT NULL,
+	pass_hash VARCHAR(255) NOT NULL,
+	created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+--habits table
+CREATE TABLE habits(
+	id BIGSERIAL PRIMARY KEY,
+	user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	name VARCHAR(100) NOT NULL,
+	description TEXT,
+	created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+--completion log table	
 );
 
--- 2. Habits Table
-CREATE TABLE habits (
-    id SERIAL PRIMARY KEY,
-    user_id INT REFERENCES users(id) ON DELETE CASCADE,
-    name VARCHAR(255) NOT NULL,
-    description TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT unique_user_habit_name UNIQUE (user_id, name)
-);
-
--- 3. Completion Table
-CREATE TABLE completion (
-    id SERIAL PRIMARY KEY,
-    habit_id INT REFERENCES habits(id) ON DELETE CASCADE,
-    completed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+CREATE TABLE completion(
+	id BIGSERIAL PRIMARY KEY,
+	habit_id BIGINT NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
+	completed_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
