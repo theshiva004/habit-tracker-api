@@ -36,7 +36,7 @@ habit-tracker-api/
 │── security.py      # Password hashing, JWT token creation, & auth dependencies
 │── .env             # Environment variables (git-ignored)
 |── README.md        # Project documentation
-└--requirements.txt  # Project requirements
+└──requirements.txt  # Project requirements
 ```
 
 ---
