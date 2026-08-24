@@ -1,166 +1,151 @@
-# 🎯 Habit Tracker REST API
+# Ritual Habit Tracker
 
-A lightweight, secure, and production-ready backend service for tracking habits, logging daily completions, and monitoring real-time user consistency. Built using **FastAPI**, **PostgreSQL**, **psycopg2**, and **PyJWT**.
+A full-stack habit tracker built with FastAPI, PostgreSQL, and React/Vite. Track daily habits, see live streaks and 30-day completion metrics, and review progress in a calendar-style profile history.
 
----
+## Features
 
-## ⚡ Features
+- JWT authentication with registration and login
+- Create, edit, delete, complete, and undo habits
+- Live daily dashboard with completion progress
+- Per-habit metrics calculated directly in PostgreSQL:
+  - Current consecutive-day streak ending today
+  - Completed and tracked days in the last 30 days
+  - 30-day completion rate
+- Profile statistics for the most recent 30 days, including zero-completion days
+- Calendar progress view ordered from today backward, with completion-intensity levels
 
-* **Authentication & Security**: User registration and login powered by OAuth2 Password Flow, JWT access tokens, and `bcrypt` password hashing.
-* **Habit Management (CRUD)**: Full support to create, view, update, and delete habits.
-* **Database-Level Integrity**: Enforces unique habit names per user via SQL `UNIQUE` constraints and API-level pre-checks.
-* **Daily Completion Tracking**: Log habit completions with single-completion enforcement per day and an option to undo (`DELETE`).
-* **Live Daily Dashboard**: Optimized `/habits/today` endpoint utilizing SQL `EXISTS` subqueries to fetch all active habits with real-time `completed_today` boolean flags.
-* **SQL Injection Prevention**: Parameterized direct SQL queries with `psycopg2` and `RealDictCursor`.
+## Tech stack
 
----
+- Backend: FastAPI, Pydantic, psycopg2, PyJWT
+- Database: PostgreSQL
+- Frontend: React, Vite, Lucide icons
 
-## 🛠️ Tech Stack
-
-* **Framework**: [FastAPI](https://fastapi.tiangolo.com/)
-* **Database**: [PostgreSQL](https://www.postgresql.org/)
-* **Database Driver**: `psycopg2-binary` (using `RealDictCursor`)
-* **Security & Auth**: `PyJWT`, `passlib` (bcrypt)
-* **Data Validation**: `Pydantic` v2
-* **Environment Configuration**: `python-dotenv`
-
----
-
-## 📂 Project Structure
+## Project structure
 
 ```text
-habit-tracker-api/
-│── database.py      # PostgreSQL connection setup & configuration
-│── main.py          # FastAPI routes, error handling, & business logic
-│── schemas.py       # Pydantic data models & response serialization
-│── security.py      # Password hashing, JWT token creation, & auth dependencies
-│── .env             # Environment variables (git-ignored)
-|── README.md        # Project documentation
-└──requirements.txt  # Project requirements
+HABIT_TRACKER/
+├── backend/
+│   ├── database.py       # PostgreSQL connection configuration
+│   ├── main.py           # API routes and SQL queries
+│   ├── schemas.py        # Request and response models
+│   └── security.py       # Password hashing and JWT authentication
+├── frontend/
+│   ├── src/
+│   │   ├── App.jsx       # React application
+│   │   └── styles.css    # Application styles
+│   └── package.json
+├── requirements.txt
+└── .env                  # Local configuration; not committed
 ```
 
----
+## Database setup
 
-## 🗄️ Database Schema Setup
-
-Execute the following SQL script in your PostgreSQL database to initialize the required tables and constraints:
+Create a PostgreSQL database, then run the following schema.
 
 ```sql
--- users table
-CREATE TABLE users(
-	id BIGSERIAL PRIMARY KEY,
-	email VARCHAR(255) UNIQUE NOT NULL,
-	pass_hash VARCHAR(255) NOT NULL,
-	created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-);
---habits table
-CREATE TABLE habits(
-	id BIGSERIAL PRIMARY KEY,
-	user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-	name VARCHAR(100) NOT NULL,
-	description TEXT,
-	created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
---completion log table	
+CREATE TABLE users (
+    id BIGSERIAL PRIMARY KEY,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    pass_hash VARCHAR(255) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE completion(
-	id BIGSERIAL PRIMARY KEY,
-	habit_id BIGINT NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
-	completed_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+CREATE TABLE habits (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL,
+    description TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE completion (
+    id BIGSERIAL PRIMARY KEY,
+    habit_id BIGINT NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
+    completed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX completion_habit_completed_at_idx
+    ON completion (habit_id, completed_at);
 ```
 
----
+## Local setup
 
-## 🚀 Local Setup & Installation
-
-### 1. Clone the Repository
-```bash
-git clone https://github.com/your-username/habit-tracker-api.git
-cd habit-tracker-api
-```
-
-### 2. Set Up Virtual Environment
-```bash
-# Windows
-python -m venv venv
-venv\Scripts\activate
-
-# macOS / Linux
-python3 -m venv venv
-source venv/bin/activate
-```
-
-### 3. Install Dependencies
-```bash
-pip install fastapi uvicorn psycopg2-binary pyjwt passlib[bcrypt] python-dotenv pydantic[email]
-```
-
-### 4. Configure Environment Variables
-Create a `.env` file in the project root directory:
+Create a `.env` file in the project root:
 
 ```env
 DB_HOST=localhost
 DB_NAME=habit_tracker
 DB_USER=postgres
-DB_PASSWORD=your_postgres_password
+DB_PASSWORD=your_password
 DB_PORT=5432
-SECRET_KEY=your_super_secret_jwt_key
+SECRET_KEY=replace_with_a_long_random_secret
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 ```
 
-### 5. Run the Application
+Install and run the backend:
+
 ```bash
-uvicorn main:app --reload
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn backend.main:app --reload
 ```
 
-The server will be live at `[http://127.0.0.1:8000](http://127.0.0.1:8000)`.
+In a second terminal, run the frontend:
 
----
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-## 📌 API Reference
+The FastAPI documentation is available at `http://127.0.0.1:8000/docs`.
 
-Interactive API docs are automatically generated and accessible via:
-* **Swagger UI**: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
-* **ReDoc**: [http://127.0.0.1:8000/redoc](http://127.0.0.1:8000/redoc)
+## API overview
 
-### Summary of Endpoints
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| POST | `/register` | Create an account |
+| POST | `/login` | Get a bearer access token |
+| GET | `/users/me` | Get the authenticated user |
+| GET | `/users/me/stats` | Get daily completion history for the last 30 days |
+| GET | `/habits/today` | Get today's habits and database-calculated metrics |
+| POST | `/habits` | Create a habit |
+| PUT | `/habits/{habit_id}` | Update a habit |
+| DELETE | `/habits/{habit_id}` | Delete a habit and its completions |
+| POST | `/habits/{habit_id}/complete` | Mark a habit complete today |
+| DELETE | `/habits/{habit_id}/complete` | Undo today's completion |
+| GET | `/habits/{habit_id}/completions` | Get one habit's completion history |
 
-| Category | Method | Endpoint | Description | Auth Required |
-| :--- | :--- | :--- | :--- | :--- |
-| **Auth** | `POST` | `/register` | Register a new user | No |
-| **Auth** | `POST` | `/login` | Authenticate and retrieve JWT token | No |
-| **Dashboard** | `GET` | `/habits/today` | Fetch all user habits with `completed_today` flag | Yes |
-| **Habits** | `GET` | `/habits` | Retrieve all habits for current user | Yes |
-| **Habits** | `POST` | `/habits` | Create a new habit | Yes |
-| **Habits** | `PUT` | `/habits/{id}` | Update habit name or description | Yes |
-| **Habits** | `DELETE` | `/habits/{id}` | Delete a habit and its history | Yes |
-| **Tracking** | `POST` | `/habits/{id}/complete` | Mark habit as completed for today | Yes |
-| **Tracking** | `DELETE` | `/habits/{id}/complete` | Undo today's completion log | Yes |
-| **Tracking** | `GET` | `/habits/{id}/completions` | Retrieve full completion history | Yes |
+All endpoints except `/register` and `/login` require:
 
----
+```http
+Authorization: Bearer <access_token>
+```
 
-## 📝 Sample API Payload
+## Metrics responses
 
-### `GET /habits/today` Response
+`GET /habits/today` includes the following fields for every habit:
+
 ```json
-[
-  {
-    "id": 1,
-    "user_id": 2,
-    "name": "Play Golf",
-    "description": "Golf at 4 PM",
-    "created_at": "2026-08-17T22:09:31.589695+05:30",
-    "completed_today": true
-  },
-  {
-    "id": 2,
-    "user_id": 2,
-    "name": "Read 10 Pages",
-    "description": "Read tech blogs or fiction",
-    "created_at": "2026-08-18T09:15:00.000000+05:30",
-    "completed_today": false
-  }
-]
+{
+  "id": 1,
+  "name": "Read 10 pages",
+  "completed_today": true,
+  "current_streak": 5,
+  "completed_days_last_30": 18,
+  "tracked_days_last_30": 30,
+  "completion_rate_last_30": 60.0
+}
+```
+
+`GET /users/me/stats` returns all 30 days in chronological order. The frontend reverses that result so the profile calendar begins with today.
+
+```json
+{
+  "history": [
+    { "date": "2026-07-26", "completed_habits": 0 },
+    { "date": "2026-07-27", "completed_habits": 3 }
+  ]
+}
 ```
