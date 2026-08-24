@@ -1,5 +1,40 @@
-venv/
-__pycache__/
-*.pyc
+# Environment and secrets
 .env
+.env.*
+!.env.example
+
+# Python
+venv/
+.venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+*.pyd
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Frontend dependencies and build output
+frontend/node_modules/
+frontend/dist/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# IDE and operating-system files
+.vscode/
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Local database dump
 HABIT_TRACKER_DB.sql
