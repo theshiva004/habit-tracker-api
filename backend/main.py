@@ -11,7 +11,8 @@ from backend.schemas import (
     HabitCreate,
     HabitCompletionResponse,
     HabitUpdate,
-    HabitTodayResponse
+    HabitTodayResponse,
+    UserStatsResponse
 )
 from backend.security import (
     hash_password, 
@@ -94,6 +95,38 @@ def login_user(form_data: OAuth2PasswordRequestForm = Depends()):
 @app.get("/users/me", response_model=UserResponse)
 def read_current_user(current_user: dict = Depends(get_current_user)):
     return current_user
+
+@app.get("/users/me/stats", response_model=UserStatsResponse)
+def get_current_user_stats(current_user: dict = Depends(get_current_user)):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        WITH days AS (
+            SELECT generate_series(CURRENT_DATE - 29, CURRENT_DATE, INTERVAL '1 day')::DATE AS date
+        ), daily_completions AS (
+            SELECT
+                c.completed_at::DATE AS date,
+                COUNT(DISTINCT c.habit_id)::INTEGER AS completed_habits
+            FROM completion c
+            INNER JOIN habits h ON h.id = c.habit_id
+            WHERE h.user_id = %s
+              AND c.completed_at::DATE BETWEEN CURRENT_DATE - 29 AND CURRENT_DATE
+            GROUP BY c.completed_at::DATE
+        )
+        SELECT d.date, COALESCE(dc.completed_habits, 0)::INTEGER AS completed_habits
+        FROM days d
+        LEFT JOIN daily_completions dc ON dc.date = d.date
+        ORDER BY d.date ASC;
+        """,
+        (current_user["id"],)
+    )
+    history = cursor.fetchall()
+    cursor.close()
+    conn.close()
+
+    return {"history": history}
 
 @app.post("/habits", response_model=HabitResponse)
 def create_habit(habit: HabitCreate, current_user: dict = Depends(get_current_user)):
@@ -294,7 +327,42 @@ def get_today_dashboard(current_user: dict = Depends(get_current_user)):
                 SELECT 1 FROM completion c 
                 WHERE c.habit_id = h.id 
                 AND c.completed_at::DATE = CURRENT_DATE
-            ) AS completed_today
+            ) AS completed_today,
+            (
+                WITH RECURSIVE streak_days(completed_on) AS (
+                    SELECT CURRENT_DATE
+                    WHERE EXISTS (
+                        SELECT 1 FROM completion c
+                        WHERE c.habit_id = h.id AND c.completed_at::DATE = CURRENT_DATE
+                    )
+                    UNION ALL
+                    SELECT completed_on - 1
+                    FROM streak_days
+                    WHERE EXISTS (
+                        SELECT 1 FROM completion c
+                        WHERE c.habit_id = h.id
+                          AND c.completed_at::DATE = streak_days.completed_on - 1
+                    )
+                )
+                SELECT COUNT(*)::INTEGER FROM streak_days
+            ) AS current_streak,
+            (
+                SELECT COUNT(DISTINCT c.completed_at::DATE)::INTEGER
+                FROM completion c
+                WHERE c.habit_id = h.id
+                  AND c.completed_at::DATE BETWEEN CURRENT_DATE - 29 AND CURRENT_DATE
+            ) AS completed_days_last_30,
+            (LEAST(CURRENT_DATE, h.created_at::DATE) - GREATEST(h.created_at::DATE, CURRENT_DATE - 29) + 1)::INTEGER
+                AS tracked_days_last_30,
+            ROUND(
+                (
+                    SELECT COUNT(DISTINCT c.completed_at::DATE)::NUMERIC
+                    FROM completion c
+                    WHERE c.habit_id = h.id
+                      AND c.completed_at::DATE BETWEEN CURRENT_DATE - 29 AND CURRENT_DATE
+                ) / NULLIF(LEAST(CURRENT_DATE, h.created_at::DATE) - GREATEST(h.created_at::DATE, CURRENT_DATE - 29) + 1, 0) * 100,
+                1
+            ) AS completion_rate_last_30
         FROM habits h
         WHERE h.user_id = %s
         ORDER BY h.id ASC;

@@ -1,5 +1,5 @@
-from datetime import datetime
-from typing import Optional
+from datetime import date, datetime
+from typing import List, Optional
 from pydantic import BaseModel, EmailStr
 
 # User Schemas
@@ -57,6 +57,17 @@ class HabitTodayResponse(BaseModel):
     description: Optional[str] = None
     created_at: datetime
     completed_today: bool
+    current_streak: int
+    completed_days_last_30: int
+    tracked_days_last_30: int
+    completion_rate_last_30: float
 
     class Config:
         from_attributes = True
+
+class DailyCompletionStat(BaseModel):
+    date: date
+    completed_habits: int
+
+class UserStatsResponse(BaseModel):
+    history: List[DailyCompletionStat]

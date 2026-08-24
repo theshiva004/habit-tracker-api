@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  ArrowRight, Check, CheckCircle2, Circle, Clock3, LogOut, MoreHorizontal,
-  Pencil, Plus, Sparkles, Trash2, X,
+  ArrowRight, Check, CheckCircle2, Circle, Clock3, Flame, LogOut, MoreHorizontal,
+  Pencil, Plus, Sparkles, Trash2, UserRound, X,
 } from 'lucide-react'
 
 const API = import.meta.env.VITE_API_URL || '/api'
@@ -33,6 +33,9 @@ function App() {
   const [modal, setModal] = useState(null)
   const [historyHabit, setHistoryHabit] = useState(null)
   const [history, setHistory] = useState([])
+  const [statsOpen, setStatsOpen] = useState(false)
+  const [statsHistory, setStatsHistory] = useState([])
+  const [statsLoading, setStatsLoading] = useState(false)
 
   const completed = useMemo(() => habits.filter((habit) => habit.completed_today).length, [habits])
   const progress = habits.length ? Math.round((completed / habits.length) * 100) : 0
@@ -64,7 +67,7 @@ function App() {
     try {
       if (habit.completed_today) await request(`/habits/${habit.id}/complete`, { method: 'DELETE' }, token)
       else await request(`/habits/${habit.id}/complete`, { method: 'POST' }, token)
-      setHabits((current) => current.map((item) => item.id === habit.id ? { ...item, completed_today: !item.completed_today } : item))
+      setHabits(await request('/habits/today', {}, token))
     } catch (reason) { setError(reason.message) }
   }
 
@@ -98,6 +101,19 @@ function App() {
     } catch (reason) { setError(reason.message) }
   }
 
+  async function showStats() {
+    setError('')
+    setStatsOpen(true)
+    setStatsLoading(true)
+    try {
+      const stats = await request('/users/me/stats', {}, token)
+      setStatsHistory(stats.history)
+    } catch (reason) {
+      setError(reason.message)
+      setStatsOpen(false)
+    } finally { setStatsLoading(false) }
+  }
+
   if (!token) return <AuthScreen onAuthenticated={setToken} />
   if (loading) return <div className="page-loader"><span className="loader" />Loading your rituals</div>
 
@@ -105,7 +121,7 @@ function App() {
     <main className="app-shell">
       <header className="topbar">
         <div className="brand"><span className="brand-mark"><Sparkles size={17} /></span> RITUAL</div>
-        <div className="user-actions"><span className="avatar">{user?.email?.[0]?.toUpperCase()}</span><button className="icon-button" title="Sign out" onClick={logout}><LogOut size={18} /></button></div>
+        <div className="user-actions"><button className="avatar" title="View your statistics" aria-label="View your statistics" onClick={showStats}>{user?.email?.[0]?.toUpperCase()}</button><button className="icon-button" title="Sign out" onClick={logout}><LogOut size={18} /></button></div>
       </header>
       <section className="welcome">
         <div><p className="eyebrow">{dateLabel.format(new Date())}</p><h1>Make today count.</h1><p className="subtle">Small, deliberate actions become your momentum.</p></div>
@@ -123,6 +139,7 @@ function App() {
       </section>
       {modal && <HabitModal habit={modal.id ? modal : null} onClose={() => setModal(null)} onSave={saveHabit} />}
       {historyHabit && <HistoryModal habit={historyHabit} history={history} onClose={() => setHistoryHabit(null)} />}
+      {statsOpen && <StatsModal history={statsHistory} loading={statsLoading} onClose={() => setStatsOpen(false)} />}
     </main>
   )
 }
@@ -147,7 +164,7 @@ function AuthScreen({ onAuthenticated }) {
 
 function HabitRow({ habit, onToggle, onEdit, onDelete, onHistory }) {
   const [open, setOpen] = useState(false)
-  return <article className={`habit-row ${habit.completed_today ? 'is-complete' : ''}`}><button className="check-button" onClick={() => onToggle(habit)} aria-label={`Mark ${habit.name} as ${habit.completed_today ? 'incomplete' : 'complete'}`}>{habit.completed_today ? <CheckCircle2 /> : <Circle />}</button><button className="habit-main" onClick={onHistory}><span>{habit.name}</span>{habit.description && <small>{habit.description}</small>}</button><div className="row-actions"><button className="icon-button" title="Habit options" onClick={() => setOpen(!open)}><MoreHorizontal size={20} /></button>{open && <div className="action-menu"><button onClick={onHistory}><Clock3 size={15} />History</button><button onClick={onEdit}><Pencil size={15} />Edit</button><button className="danger" onClick={onDelete}><Trash2 size={15} />Delete</button></div>}</div></article>
+  return <article className={`habit-row ${habit.completed_today ? 'is-complete' : ''}`}><button className="check-button" onClick={() => onToggle(habit)} aria-label={`Mark ${habit.name} as ${habit.completed_today ? 'incomplete' : 'complete'}`}>{habit.completed_today ? <CheckCircle2 /> : <Circle />}</button><button className="habit-main" onClick={onHistory}><span>{habit.name}</span>{habit.description && <small>{habit.description}</small>}<div className="habit-metrics"><span title="Consecutive completed days ending today"><Flame size={14} />{habit.current_streak} day streak</span><span>{habit.completed_days_last_30}/{habit.tracked_days_last_30} days · {habit.completion_rate_last_30}% in 30 days</span></div></button><div className="row-actions"><button className="icon-button" title="Habit options" onClick={() => setOpen(!open)}><MoreHorizontal size={20} /></button>{open && <div className="action-menu"><button onClick={onHistory}><Clock3 size={15} />History</button><button onClick={onEdit}><Pencil size={15} />Edit</button><button className="danger" onClick={onDelete}><Trash2 size={15} />Delete</button></div>}</div></article>
 }
 
 function EmptyState({ onCreate }) { return <div className="empty-state"><div className="empty-icon"><Check size={28} /></div><h3>Your day is open.</h3><p>Add the first habit you want to practice today.</p><button className="text-button" onClick={onCreate}>Add a habit <ArrowRight size={16} /></button></div> }
@@ -159,5 +176,11 @@ function HabitModal({ habit, onClose, onSave }) {
 }
 
 function HistoryModal({ habit, history, onClose }) { return <div className="modal-backdrop" role="presentation" onMouseDown={onClose}><section className="modal history-modal" onMouseDown={(event) => event.stopPropagation()}><div className="modal-header"><div><p className="eyebrow">Completion history</p><h2>{habit.name}</h2></div><button className="icon-button" onClick={onClose} title="Close"><X size={19} /></button></div>{history.length ? <div className="history-list">{history.slice(0, 12).map((item) => <div key={item.id}><CheckCircle2 size={18} /><span>{new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(item.completed_at))}</span></div>)}</div> : <p className="empty-history">No completions yet. Today is a good day to begin.</p>}</section></div> }
+
+function StatsModal({ history, loading, onClose }) {
+  const total = history.reduce((sum, day) => sum + day.completed_habits, 0)
+  const dateFormat = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+  return <div className="modal-backdrop" role="presentation" onMouseDown={onClose}><section className="modal stats-modal" aria-label="Your 30-day statistics" onMouseDown={(event) => event.stopPropagation()}><div className="modal-header"><div><p className="eyebrow">Your progress</p><h2><UserRound size={23} />Last 30 days</h2></div><button className="icon-button" onClick={onClose} title="Close"><X size={19} /></button></div>{loading ? <div className="stats-loading"><span className="loader" />Loading your history</div> : <><p className="stats-summary"><strong>{total}</strong> habit completions across the last 30 days.</p><div className="stats-history">{history.map((day) => <div className="stats-day" key={day.date}><span>{dateFormat.format(new Date(`${day.date}T00:00:00`))}</span><b>{day.completed_habits} {day.completed_habits === 1 ? 'habit' : 'habits'}</b></div>)}</div></>}</section></div>
+}
 
 export default App
